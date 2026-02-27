@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Zerodha Kite TOTP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f14;
+      --surface:  #161a23;
+      --card:     #1e2330;
+      --border:   #2a3040;
+      --accent:   #f97316;
+      --accent2:  #fb923c;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --text:     #f1f5f9;
+      --muted:    #64748b;
+      --radius:   18px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    /* ── Setup screen ─────────────────────── */
+    #setup-screen {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      animation: fadeUp .4s ease;
+    }
+
+    .setup-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+
+    .setup-title { font-size: 20px; font-weight: 700; }
+    .setup-subtitle { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    label { font-size: 13px; font-weight: 500; color: var(--muted); display: block; margin-bottom: 8px; }
+
+    input[type="password"], input[type="text"] {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 14px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus { border-color: var(--accent); }
+
+    .toggle-vis {
+      position: relative;
+    }
+    .toggle-vis input { padding-right: 44px; }
+    .eye-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 18px; padding: 4px;
+      line-height: 1;
+    }
+    .eye-btn:hover { color: var(--text); }
+
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity .2s, transform .1s;
+    }
+    .btn-primary:hover { opacity: .9; }
+    .btn-primary:active { transform: scale(.98); }
+
+    /* ── TOTP screen ──────────────────────── */
+    #totp-screen {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      animation: fadeUp .4s ease;
+    }
+
+    .totp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .totp-brand {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .totp-brand .logo-icon { width: 36px; height: 36px; font-size: 18px; border-radius: 10px; }
+    .totp-brand-name { font-size: 16px; font-weight: 700; }
+    .totp-brand-sub  { font-size: 11px; color: var(--muted); }
+
+    .edit-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 14px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      transition: border-color .2s, color .2s;
+    }
+    .edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Main TOTP card ───────────────────── */
+    .totp-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 24px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .totp-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% -10%, rgba(249,115,22,.12) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .totp-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .totp-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 52px;
+      font-weight: 600;
+      letter-spacing: .18em;
+      color: var(--text);
+      line-height: 1;
+      transition: opacity .15s;
+      user-select: all;
+    }
+    .totp-code.refresh { opacity: 0; }
+
+    /* ── Timer ring ───────────────────────── */
+    .timer-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .timer-ring-svg {
+      overflow: visible;
+    }
+
+    .ring-bg { fill: none; stroke: var(--border); stroke-width: 5; }
+    .ring-fg {
+      fill: none;
+      stroke: var(--green);
+      stroke-width: 5;
+      stroke-linecap: round;
+      transform: rotate(-90deg);
+      transform-origin: center;
+      transition: stroke-dashoffset .9s linear, stroke .5s;
+    }
+    .ring-text {
+      fill: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .ring-sub {
+      fill: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 9px;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+
+    /* ── Progress bar strip ───────────────── */
+    .progress-bar-wrap {
+      width: 100%;
+      height: 5px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--green);
+      transition: width .9s linear, background .5s;
+    }
+
+    /* ── Copy button ──────────────────────── */
+    .copy-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: opacity .2s, transform .1s;
+    }
+    .copy-btn:hover { opacity: .9; }
+    .copy-btn:active { transform: scale(.97); }
+    .copy-btn.copied {
+      background: linear-gradient(135deg, var(--green), #16a34a);
+    }
+
+    .copy-icon { font-size: 17px; }
+
+    /* ── Status/info chips ────────────────── */
+    .info-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s infinite;
+    }
+
+    /* ── Animations ───────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ SETUP SCREEN ═══════════════════════════════════════ -->
+<div id="setup-screen" class="hidden">
+  <div class="setup-logo">
+    <div class="logo-icon">🔐</div>
+    <div>
+      <div class="setup-title">Zerodha Kite TOTP</div>
+      <div class="setup-subtitle">One-time setup — stored locally on this device</div>
+    </div>
+  </div>
+
+  <div>
+    <label for="secret-input">KITE_TOTP_SECRET</label>
+    <div class="toggle-vis">
+      <input type="password" id="secret-input" placeholder="Paste your base32 TOTP secret…" autocomplete="off" spellcheck="false" />
+      <button class="eye-btn" id="eye-toggle" title="Toggle visibility">👁</button>
+    </div>
+    <p class="hint">Found in your Zerodha 2FA setup QR code. Saved only to this browser's localStorage.</p>
+  </div>
+
+  <button class="btn-primary" id="save-btn">Save &amp; Generate TOTP →</button>
+</div>
+
+<!-- ═══ TOTP SCREEN ═════════════════════════════════════════ -->
+<div id="totp-screen" class="hidden">
+  <div class="totp-header">
+    <div class="totp-brand">
+      <div class="logo-icon">🔐</div>
+      <div>
+        <div class="totp-brand-name">Kite TOTP</div>
+        <div class="totp-brand-sub">Zerodha Authenticator</div>
+      </div>
+    </div>
+    <button class="edit-btn" id="edit-btn">✏️ Edit Secret</button>
+  </div>
+
+  <div class="totp-card">
+    <div class="totp-label">Current TOTP Code</div>
+
+    <div class="totp-code" id="totp-display">——————</div>
+
+    <!-- SVG ring timer -->
+    <svg class="timer-ring-svg" width="90" height="90" viewBox="0 0 90 90">
+      <circle class="ring-bg" cx="45" cy="45" r="38" />
+      <circle class="ring-fg" id="ring-circle" cx="45" cy="45" r="38"
+              stroke-dasharray="238.76"
+              stroke-dashoffset="0" />
+      <text class="ring-text" x="45" y="41" id="ring-seconds">30</text>
+      <text class="ring-sub"  x="45" y="56">sec left</text>
+    </svg>
+
+    <!-- Progress bar -->
+    <div class="progress-bar-wrap" style="margin-top:-8px">
+      <div class="progress-bar-fill" id="progress-fill" style="width:100%"></div>
+    </div>
+
+    <div class="info-row">
+      <div class="dot"></div>
+      <span>Auto-refreshes every 30 seconds</span>
+    </div>
+  </div>
+
+  <!-- Copy button -->
+  <button class="copy-btn" id="copy-btn">
+    <span class="copy-icon">📋</span>
+    <span id="copy-label">Copy to Clipboard</span>
+  </button>
+</div>
+
+<!-- ═══ JAVASCRIPT ══════════════════════════════════════════ -->
+<script>
+/* ── TOTP Implementation (RFC 6238 / pyotp-compatible) ─────────────────
+   Uses HMAC-SHA1 with a 30-second window, 6-digit output.
+   Mirrors pyotp.TOTP exactly.
+────────────────────────────────────────────────────────────────────── */
+
+// Base32 decode (RFC 4648)
+function base32Decode(input) {
+  const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  input = input.toUpperCase().replace(/=+$/, '');
+  const bytes = [];
+  let bits = 0, value = 0;
+  for (const ch of input) {
+    const idx = CHARS.indexOf(ch);
+    if (idx === -1) continue; // skip padding / whitespace
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+// HMAC-SHA1 via WebCrypto
+async function hmacSha1(keyBytes, msgBytes) {
+  const key = await crypto.subtle.importKey(
+    'raw', keyBytes,
+    { name: 'HMAC', hash: 'SHA-1' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, msgBytes);
+  return new Uint8Array(sig);
+}
+
+// Generate TOTP
+async function generateTOTP(secret) {
+  const keyBytes = base32Decode(secret);
+
+  // 8-byte big-endian counter = floor(now / 30)
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const msg = new DataView(new ArrayBuffer(8));
+  msg.setUint32(4, counter, false); // high 32 bits = 0 for current era
+
+  const hash = await hmacSha1(keyBytes, new Uint8Array(msg.buffer));
+
+  // Dynamic truncation
+  const offset = hash[hash.length - 1] & 0x0f;
+  const binCode = ((hash[offset]     & 0x7f) << 24) |
+                  ((hash[offset + 1] & 0xff) << 16) |
+                  ((hash[offset + 2] & 0xff) <<  8) |
+                   (hash[offset + 3] & 0xff);
+
+  return String(binCode % 1_000_000).padStart(6, '0');
+}
+
+/* ── App state ─────────────────────────────────────────────────── */
+const STORAGE_KEY = 'kite_totp_secret';
+const INTERVAL    = 30; // seconds
+const CIRCUMF     = 2 * Math.PI * 38; // SVG ring circumference
+
+let currentCode    = '';
+let tickTimer      = null;
+
+/* ── DOM refs ──────────────────────────────────────────────────── */
+const setupScreen  = document.getElementById('setup-screen');
+const totpScreen   = document.getElementById('totp-screen');
+const secretInput  = document.getElementById('secret-input');
+const eyeToggle    = document.getElementById('eye-toggle');
+const saveBtn      = document.getElementById('save-btn');
+const editBtn      = document.getElementById('edit-btn');
+const totpDisplay  = document.getElementById('totp-display');
+const ringCircle   = document.getElementById('ring-circle');
+const ringSeconds  = document.getElementById('ring-seconds');
+const progressFill = document.getElementById('progress-fill');
+const copyBtn      = document.getElementById('copy-btn');
+const copyLabel    = document.getElementById('copy-label');
+
+/* ── Helpers ───────────────────────────────────────────────────── */
+function getRemainingSeconds() {
+  return INTERVAL - (Math.floor(Date.now() / 1000) % INTERVAL);
+}
+
+function updateTimerUI(secsLeft) {
+  const frac = secsLeft / INTERVAL;
+  const offset = CIRCUMF * (1 - frac);
+
+  // Ring
+  ringCircle.style.strokeDashoffset = offset;
+  ringSeconds.textContent = secsLeft;
+
+  // Progress bar
+  progressFill.style.width = (frac * 100) + '%';
+
+  // Colour: green → amber → red
+  const colour = secsLeft > 10 ? '#22c55e' : secsLeft > 5 ? '#f59e0b' : '#ef4444';
+  ringCircle.style.stroke    = colour;
+  progressFill.style.background = colour;
+}
+
+async function refreshCode() {
+  const secret = localStorage.getItem(STORAGE_KEY);
+  if (!secret) return;
+
+  // Fade out old code
+  totpDisplay.classList.add('refresh');
+  await new Promise(r => setTimeout(r, 150));
+
+  currentCode = await generateTOTP(secret);
+
+  // Show new code with spaces for readability: 123 456
+  totpDisplay.textContent = currentCode.slice(0, 3) + ' ' + currentCode.slice(3);
+  totpDisplay.classList.remove('refresh');
+}
+
+function startLiveCounter() {
+  if (tickTimer) clearInterval(tickTimer);
+
+  // Immediate first render
+  const secsNow = getRemainingSeconds();
+  updateTimerUI(secsNow);
+
+  // Refresh code if we just crossed a 30-second boundary
+  if (secsNow === INTERVAL || secsNow === 30) refreshCode();
+
+  tickTimer = setInterval(async () => {
+    const secs = getRemainingSeconds();
+    updateTimerUI(secs);
+
+    // When counter resets to INTERVAL (30) a new period started
+    if (secs === INTERVAL || secs === 30) {
+      await refreshCode();
+    }
+  }, 1000);
+}
+
+/* ── Copy to clipboard ─────────────────────────────────────────── */
+copyBtn.addEventListener('click', async () => {
+  if (!currentCode) return;
+  try {
+    await navigator.clipboard.writeText(currentCode);
+  } catch {
+    // Fallback for restricted contexts
+    const ta = document.createElement('textarea');
+    ta.value = currentCode;
+    ta.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  copyBtn.classList.add('copied');
+  copyLabel.textContent = '✓ Copied!';
+  setTimeout(() => {
+    copyBtn.classList.remove('copied');
+    copyLabel.textContent = 'Copy to Clipboard';
+  }, 2000);
+});
+
+/* ── Setup flow ────────────────────────────────────────────────── */
+eyeToggle.addEventListener('click', () => {
+  const isPassword = secretInput.type === 'password';
+  secretInput.type = isPassword ? 'text' : 'password';
+  eyeToggle.textContent  = isPassword ? '🙈' : '👁';
+});
+
+saveBtn.addEventListener('click', async () => {
+  const val = secretInput.value.trim().toUpperCase().replace(/\s/g, '');
+  if (!val) { secretInput.style.borderColor = '#ef4444'; return; }
+  secretInput.style.borderColor = '';
+
+  // Validate: must be a plausible base32 string
+  if (!/^[A-Z2-7]+=*$/.test(val)) {
+    alert('That doesn\'t look like a valid base32 TOTP secret.\nPlease check and try again.');
+    return;
+  }
+
+  localStorage.setItem(STORAGE_KEY, val);
+  showTOTPScreen();
+});
+
+// Allow Enter key on input
+secretInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveBtn.click(); });
+
+editBtn.addEventListener('click', () => {
+  if (tickTimer) clearInterval(tickTimer);
+  showSetupScreen();
+});
+
+/* ── Screen switching ──────────────────────────────────────────── */
+function showSetupScreen() {
+  totpScreen.classList.add('hidden');
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    secretInput.value = saved;
+    secretInput.type  = 'text';
+    eyeToggle.textContent = '🙈';
+  } else {
+    secretInput.value = '';
+    secretInput.type  = 'password';
+    eyeToggle.textContent = '👁';
+  }
+  setupScreen.classList.remove('hidden');
+  secretInput.focus();
+}
+
+async function showTOTPScreen() {
+  setupScreen.classList.add('hidden');
+  totpScreen.classList.remove('hidden');
+  await refreshCode();
+  startLiveCounter();
+}
+
+/* ── Init ──────────────────────────────────────────────────────── */
+(async function init() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    await showTOTPScreen();
+  } else {
+    showSetupScreen();
+  }
+})();
+
+// Refresh when tab becomes visible again (battery-friendly)
+document.addEventListener('visibilitychange', async () => {
+  if (!document.hidden && localStorage.getItem(STORAGE_KEY)) {
+    await refreshCode();
+    startLiveCounter(); // restarts the interval cleanly
+  }
+});
+</script>
+</body>
+</html>
